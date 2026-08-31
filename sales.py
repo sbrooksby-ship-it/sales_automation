@@ -61,7 +61,7 @@ def run_extraction():
     print("Authenticating with Google Drive...")
     drive_service = get_drive_service()
 
-   with sync_playwright() as p:
+    with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
