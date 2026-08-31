@@ -7,8 +7,12 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaInMemoryUpload
 from playwright.sync_api import sync_playwright
 
-# --- CONFIGURATION ---
-
+# --- CONFIGURATION & ENV VARS ---
+FIVE9_USER = os.environ.get("FIVE9_USER")
+FIVE9_PASS = os.environ.get("FIVE9_PASS")
+SALES_FOLDER_ID = "10fCNy7z2nqxbIzGFwP7cRrYQm6PK--zp"
+CLIENT_SECRET_FILE = "client_secret.json"
+DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 # Set this to the exact Folder ID of your "Sales Calls" folder in Google Drive
 SALES_FOLDER_ID = "10fCNy7z2nqxbIzGFwP7cRrYQm6PK--zp"
 
