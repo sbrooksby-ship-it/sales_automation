@@ -8,8 +8,6 @@ from googleapiclient.http import MediaInMemoryUpload
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
-FIVE9_USER = "div5vcc@bonadmin.com"
-FIVE9_PASS = "Div5Rules!"
 
 # Set this to the exact Folder ID of your "Sales Calls" folder in Google Drive
 SALES_FOLDER_ID = "10fCNy7z2nqxbIzGFwP7cRrYQm6PK--zp"
