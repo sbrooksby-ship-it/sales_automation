@@ -1,0 +1,36 @@
+name: Daily Five9 to Google Drive Export
+
+on:
+  schedule:
+    # 10:45 PM MDT translates to 04:45 UTC
+    - cron: '45 4 * * *'
+  workflow_dispatch: # This line adds a button so you can run it manually anytime
+
+jobs:
+  extract_transcripts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Rebuild Google Credentials
+        run: |
+          echo "${{ secrets.GOOGLE_CLIENT_SECRET }}" > client_secret.json
+          echo "${{ secrets.GOOGLE_TOKEN_BASE64 }}" | base64 --decode > token.pickle
+
+      - name: Run Extraction Script
+        env:
+          FIVE9_USER: ${{ secrets.FIVE9_USER }}
+          FIVE9_PASS: ${{ secrets.FIVE9_PASS }}
+        run: python sales.py
