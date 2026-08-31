@@ -62,7 +62,7 @@ def run_extraction():
     drive_service = get_drive_service()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+       browser = p.chromium.launch(headless=True)
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
 
