@@ -13,11 +13,7 @@ FIVE9_PASS = os.environ.get("FIVE9_PASS")
 SALES_FOLDER_ID = "10fCNy7z2nqxbIzGFwP7cRrYQm6PK--zp"
 CLIENT_SECRET_FILE = "client_secret.json"
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-# Set this to the exact Folder ID of your "Sales Calls" folder in Google Drive
-SALES_FOLDER_ID = "10fCNy7z2nqxbIzGFwP7cRrYQm6PK--zp"
 
-CLIENT_SECRET_FILE = "client_secret.json"
-DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 def get_drive_service():
     """Authenticates using stored token or initiates OAuth flow."""
@@ -40,12 +36,14 @@ def get_drive_service():
 
     return build("drive", "v3", credentials=creds)
 
+
 def is_already_in_drive(drive_service, call_id):
     """Checks if the file already exists in the destination folder."""
     query = f"'{SALES_FOLDER_ID}' in parents and name contains '{call_id}' and trashed = false"
     results = drive_service.files().list(q=query, fields="files(id, name)").execute()
     files = results.get("files", [])
     return len(files) > 0
+
 
 def upload_transcript_to_drive(drive_service, file_name, text_content):
     """Uploads transcript text directly from memory into Google Drive."""
@@ -60,6 +58,7 @@ def upload_transcript_to_drive(drive_service, file_name, text_content):
         fields="id"
     ).execute()
     print(f"Uploaded '{file_name}' to Drive. (ID: {uploaded_file.get('id')})")
+
 
 def run_extraction():
     print("Authenticating with Google Drive...")
@@ -99,8 +98,10 @@ def run_extraction():
         inner_iframe.get_by_test_id("filter-token").nth(2).click()
         
         inner_iframe.get_by_test_id("surface-content").get_by_role("combobox", name="any value").click()
-        inner_iframe.locator("[id=\"-438850558\"] > .Flex-sc-1ak395a-0 > .FauxCheckbox-sc-1yuna8r-0 > svg").click()
-        inner_iframe.locator("[id=\"160004500\"] > .Flex-sc-1ak395a-0 > .FauxCheckbox-sc-1yuna8r-0 > svg").click()
+        
+        # Target options by their exact UI label text instead of generated element IDs
+        inner_iframe.get_by_text("Option Name 1", exact=True).click()
+        inner_iframe.get_by_text("Option Name 2", exact=True).click()
         
         inner_iframe.get_by_role("button", name="Done").click()
         inner_iframe.get_by_role("button", name="Update").click()
