@@ -74,9 +74,13 @@ def run_extraction():
         page.get_by_test_id("input").click()
         page.get_by_test_id("input").fill(FIVE9_USER)
         page.get_by_role("button", name="Next").click()
-        page.get_by_role("textbox", name="Password Password").click()
-        page.get_by_role("textbox", name="Password Password").fill(FIVE9_PASS)
-        page.get_by_role("textbox", name="Password Password").press("Enter")
+        
+        # Fill password and click Sign In directly without pressing Enter
+        password_field = page.get_by_role("textbox", name="Password Password")
+        password_field.click()
+        password_field.fill(FIVE9_PASS)
+        
+        # Wait for button state to update before clicking
         page.get_by_role("button", name="Sign In").click()
 
         print("Navigating to AI Insights and setting filters...")
