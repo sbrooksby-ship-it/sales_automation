@@ -2,8 +2,8 @@ name: Daily Five9 to Google Drive Export
 
 on:
   schedule:
-    # 10:45 PM MDT translates to 04:45 UTC
-    - cron: '45 4 * * *'
+    # 7:30 PM MDT translates to 01:30 UTC
+    - cron: '30 1 * * *'
   workflow_dispatch: # This line adds a button so you can run it manually anytime
 
 jobs:
