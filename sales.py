@@ -22,7 +22,6 @@ def get_drive_service():
     """Authenticates using stored token or initiates OAuth flow."""
     creds = None
 
-    # Check if token.pickle exists AND has data (> 0 bytes)
     if os.path.exists("token.pickle") and os.path.getsize("token.pickle") > 0:
         try:
             with open("token.pickle", "rb") as token:
@@ -128,49 +127,60 @@ def run_hourly_extraction():
             grid_frame = transcripts_frame.frame_locator('iframe')
 
             print("Navigating to Transcripts tab...")
-            ai_frame.get_by_text("Transcripts").first.click()
+            ai_frame.get_by_role("menuitem", name="Transcripts").click()
             page.wait_for_timeout(5000)
 
-            # --- APPLY RESILIENT FILTERS (ROLE-BASED) ---
-            print("Applying custom filters...")
+            # --- APPLY UPDATED FILTERS ---
+            print("Applying updated custom filters...")
 
-            # 1. Custom Token setup
-            grid_frame.get_by_test_id('filter-token').nth(3).click()
-            page.wait_for_timeout(1000)
-            grid_frame.get_by_role('checkbox').nth(0).click()
-            grid_frame.get_by_role('checkbox').nth(1).click()
-            grid_frame.get_by_role('button', name='Done').click()
-            page.wait_for_timeout(1000)
+            # 1. Disposition / Token Filter Setup
+            try:
+                grid_frame.get_by_test_id('filter-token').nth(2).click()
+                page.wait_for_timeout(1000)
+                grid_frame.locator("svg, input[type='checkbox']").nth(0).click(force=True)
+                grid_frame.locator("svg, input[type='checkbox']").nth(1).click(force=True)
+                grid_frame.get_by_role('button', name='Done').click()
+                page.wait_for_timeout(1000)
+            except Exception as e_f1:
+                print(f"Note on Filter 1 setup: {e_f1}")
 
-            # 2. Date Filter ("Last 7 Days" -> "Today")
-            grid_frame.get_by_role('button', name='Last 7 Days').click()
-            page.wait_for_timeout(500)
-            grid_frame.get_by_role('menuitem', name='Today').click()
-            page.wait_for_timeout(500)
-            grid_frame.get_by_role('button', name='Update').click()
-            page.wait_for_timeout(3000)
+            # 2. Talk Time Filter (Set >= 180 seconds)
+            print("Setting Talk Time filter to >= 180 seconds...")
+            try:
+                grid_frame.get_by_role('button', name=re.compile(r'is >=|Talk Time')).click()
+                page.wait_for_timeout(500)
+                num_input = grid_frame.get_by_test_id('single-number')
+                num_input.click()
+                num_input.fill("180")
+                page.wait_for_timeout(500)
+                grid_frame.get_by_role('button', name='Update').click()
+                page.wait_for_timeout(3000)
+            except Exception as e_f2:
+                print(f"Note on Talk Time filter: {e_f2}")
 
-            # 3. Add "is not blank" filter block
-            grid_frame.get_by_role('button', name='is any value').nth(4).click()
-            page.wait_for_timeout(500)
-            grid_frame.get_by_role('combobox').nth(1).click()
-            page.wait_for_timeout(500)
-            grid_frame.get_by_role('dialog', name=re.compile('is not blank')).get_by_role('combobox').click()
-            grid_frame.get_by_role('dialog', name=re.compile("doesn't contain")).get_by_placeholder('any value').click()
-            page.wait_for_timeout(500)
-            grid_frame.get_by_role('checkbox').nth(0).click()
-            grid_frame.get_by_role('checkbox').nth(1).click()
-            grid_frame.get_by_role('button', name='Done').click()
-            grid_frame.get_by_role('button', name='Update').click()
-            page.wait_for_timeout(3000)
+            # 3. Exclude Dispositions ("doesn't contain" filters)
+            try:
+                if grid_frame.get_by_role('button', name='is any value').nth(4).is_visible():
+                    grid_frame.get_by_role('button', name='is any value').nth(4).click()
+                    page.wait_for_timeout(500)
+                    grid_frame.get_by_text("doesn't contain").first.click()
+                    page.wait_for_timeout(500)
 
-            # 4. Add "does not contain Call Drop" filter block
-            grid_frame.get_by_role('button', name=re.compile('does not contain Call Drop')).click()
-            page.wait_for_timeout(500)
-            grid_frame.get_by_role('dialog', name=re.compile("doesn't contain")).get_by_label('any value').click()
-            grid_frame.get_by_role('checkbox').first.click()
-            grid_frame.get_by_role('button', name='Done').click()
-            grid_frame.get_by_role('button', name='Update').click()
+                    search_box = grid_frame.get_by_placeholder("any value").first
+                    if search_box.is_visible():
+                        search_box.fill("dr")
+                        page.wait_for_timeout(500)
+                        grid_frame.locator("svg, input[type='checkbox']").first.click(force=True)
+
+                        search_box.fill("could")
+                        page.wait_for_timeout(500)
+                        grid_frame.locator("svg, input[type='checkbox']").first.click(force=True)
+
+                    grid_frame.get_by_role('button', name='Done').click()
+                    grid_frame.get_by_role('button', name='Update').click()
+                    page.wait_for_timeout(3000)
+            except Exception as e_f3:
+                print(f"Note on exclusion filters: {e_f3}")
 
             print("Filters applied! Waiting for grid to settle...")
             page.wait_for_timeout(6000)
@@ -210,13 +220,17 @@ def run_hourly_extraction():
                         btn.click(force=True)
                         page.wait_for_timeout(1500)
 
-                        grid_frame.get_by_role("menuitem", name=re.compile("View Transcript")).click()
-                        page.wait_for_timeout(3000)
+                        view_btn = grid_frame.get_by_role("menuitem", name=re.compile("Explore View Transcript|View Transcript"))
+                        view_btn.click()
+
+                        # --- LOAD TIME ALLOWANCE FOR TRANSCRIPTS ---
+                        print(f"Waiting 5 seconds for Call ID {call_id} transcript to load...")
+                        page.wait_for_timeout(5000)
 
                         transcripts_frame.get_by_test_id("Dropdown").get_by_role("button", name="Transcript").click()
                         page.wait_for_timeout(1000)
 
-                        with page.expect_download(timeout=15000) as download_info:
+                        with page.expect_download(timeout=20000) as download_info:
                             transcripts_frame.get_by_role("menuitem", name="Download Transcript").click()
 
                         download = download_info.value
