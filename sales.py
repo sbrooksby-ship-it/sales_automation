@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 FIVE9_USER = os.environ.get("FIVE9_USER")
 FIVE9_PASS = os.environ.get("FIVE9_PASS")
 
-# Your exact requested Google Drive Folder ID
+# Target Google Drive Folder ID
 GOOGLE_FOLDER_ID = "10fCNy7z2nqxbIzGFwP7cRrYQm6PK--zp"
 CLIENT_SECRET_FILE = "client_secret.json"
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
@@ -21,9 +21,17 @@ DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 def get_drive_service():
     """Authenticates using stored token or initiates OAuth flow."""
     creds = None
-    if os.path.exists("token.pickle"):
-        with open("token.pickle", "rb") as token:
-            creds = pickle.load(token)
+
+    # Check if token.pickle exists AND has data (> 0 bytes)
+    if os.path.exists("token.pickle") and os.path.getsize("token.pickle") > 0:
+        try:
+            with open("token.pickle", "rb") as token:
+                creds = pickle.load(token)
+        except Exception as e:
+            print(f"Error loading token.pickle: {e}")
+            creds = None
+    else:
+        print("ERROR: token.pickle is missing or 0 bytes! Check TOKEN_PICKLE_B64 in GitHub Secrets.")
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -68,8 +76,7 @@ def run_hourly_extraction():
     drive_service = get_drive_service()
 
     with sync_playwright() as p:
-        # Defaults to headed mode so you can watch it unless HEADLESS_MODE=true is set
-        headless_mode = os.environ.get("HEADLESS_MODE", "false").lower() == "true"
+        headless_mode = os.environ.get("HEADLESS_MODE", "true").lower() == "true"
         browser = p.chromium.launch(headless=headless_mode)
 
         if os.path.exists("state.json"):
@@ -124,16 +131,14 @@ def run_hourly_extraction():
             ai_frame.get_by_text("Transcripts").first.click()
             page.wait_for_timeout(5000)
 
-            # =====================================================================
-            # --- APPLY YOUR CUSTOM CODEGEN FILTERS WITH EXPLICIT WAITS ---
-            # =====================================================================
-            print("Applying custom filters from codegen script...")
-            
+            # --- APPLY RESILIENT FILTERS ---
+            print("Applying custom filters...")
+
             # 1. Custom Token setup
             grid_frame.get_by_test_id('filter-token').nth(3).click()
             page.wait_for_timeout(1000)
-            grid_frame.locator('[id="-82805172"] > .Flex-sc-1ak395a-0 > .FauxCheckbox-sc-1yuna8r-0 > svg').click()
-            grid_frame.locator('[id="-569451958"] > .Flex-sc-1ak395a-0 > .FauxCheckbox-sc-1yuna8r-0 > svg').click()
+            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(0).click()
+            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(1).click()
             grid_frame.get_by_role('button', name='Done').click()
             page.wait_for_timeout(1000)
 
@@ -153,8 +158,8 @@ def run_hourly_extraction():
             grid_frame.get_by_role('dialog', name=re.compile('is not blank')).get_by_role('combobox').click()
             grid_frame.get_by_role('dialog', name=re.compile("doesn't contain")).get_by_placeholder('any value').click()
             page.wait_for_timeout(500)
-            grid_frame.locator('[id="898302833"] > .Flex-sc-1ak395a-0 > .FauxCheckbox-sc-1yuna8r-0 > svg').click()
-            grid_frame.locator('[id="548446974"] > .Flex-sc-1ak395a-0 > .FauxCheckbox-sc-1yuna8r-0 > svg').click()
+            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(0).click()
+            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(1).click()
             grid_frame.get_by_role('button', name='Done').click()
             grid_frame.get_by_role('button', name='Update').click()
             page.wait_for_timeout(3000)
@@ -163,23 +168,19 @@ def run_hourly_extraction():
             grid_frame.get_by_role('button', name=re.compile('does not contain Call Drop')).click()
             page.wait_for_timeout(500)
             grid_frame.get_by_role('dialog', name=re.compile("doesn't contain")).get_by_label('any value').click()
-            grid_frame.locator('[id="-688236928"] > .Flex-sc-1ak395a-0 > .FauxCheckbox-sc-1yuna8r-0 > svg').click()
+            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').first.click()
             grid_frame.get_by_role('button', name='Done').click()
             grid_frame.get_by_role('button', name='Update').click()
-            
+
             print("Filters applied! Waiting for grid to settle...")
             page.wait_for_timeout(6000)
-            # =====================================================================
 
             # --- ITERATIVE SCROLL AND PROCESS LOOP ---
             print("Processing virtualized grid items...")
             processed_call_ids = set()
             consecutive_empty_scrolls = 0
 
-            # Scroll loop - allows it to pull calls all the way down the page
             while consecutive_empty_scrolls < 8:
-
-                # Scrapes all visible 7-digit Call IDs from the current grid view
                 visible_ids = grid_frame.locator("button, a, [role='gridcell'], [role='button'], .ag-cell").evaluate_all(r"""
                     (elements) => elements
                         .map(el => el.innerText.trim())
@@ -190,24 +191,20 @@ def run_hourly_extraction():
                         .filter(id => id !== null)
                 """)
 
-                # Find calls we haven't touched in this session yet
                 unprocessed_ids = [cid for cid in visible_ids if cid not in processed_call_ids]
 
                 if unprocessed_ids:
-                    # Process exactly ONE call, then let the loop restart to re-evaluate the screen
                     call_id = unprocessed_ids[0]
                     processed_call_ids.add(call_id)
-                    consecutive_empty_scrolls = 0  # Reset scroll counter
+                    consecutive_empty_scrolls = 0
 
                     print(f"\n--- Processing Call ID: {call_id} ---")
 
-                    # SKIP CHECK: Verify with Google Drive first
                     if is_already_in_drive(drive_service, call_id):
                         print(f"Skipping Call ID {call_id} (Already exists in Google Drive).")
                         continue
 
                     try:
-                        # Locate the specific button for this ID dynamically
                         btn = grid_frame.get_by_role("button", name=re.compile(call_id)).first
                         btn.scroll_into_view_if_needed()
                         btn.click(force=True)
@@ -219,7 +216,6 @@ def run_hourly_extraction():
                         transcripts_frame.get_by_test_id("Dropdown").get_by_role("button", name="Transcript").click()
                         page.wait_for_timeout(1000)
 
-                        # Trigger the download intercept
                         with page.expect_download(timeout=15000) as download_info:
                             transcripts_frame.get_by_role("menuitem", name="Download Transcript").click()
 
@@ -230,11 +226,9 @@ def run_hourly_extraction():
                         with open(temp_filepath, "r", encoding="utf-8") as f:
                             file_content = f.read()
 
-                        # PUSH TO GOOGLE DRIVE
                         upload_transcript_to_drive(drive_service, download.suggested_filename, file_content)
                         os.remove(temp_filepath)
 
-                        # SAFELY CLOSE MODAL AVOIDING STRICT MODE VIOLATIONS
                         close_btn = transcripts_frame.get_by_role("button", name="Close")
                         cancel_btn = transcripts_frame.get_by_role("button", name="Cancel")
 
@@ -254,16 +248,11 @@ def run_hourly_extraction():
                             page.wait_for_timeout(1500)
 
                 else:
-                    # Everything currently on screen is processed. We must scroll down.
                     print("No new calls visible. Scrolling down to load more...")
-
-                    # Force focus onto the body of the specific iframe before scrolling
                     grid_frame.locator("body").click(force=True)
                     page.mouse.wheel(delta_x=0, delta_y=600)
 
                     consecutive_empty_scrolls += 1
-                    
-                    # Wait 3 seconds to let the next batch of rows render
                     page.wait_for_timeout(3000)
 
             print(f"\nSUCCESS! Completed extraction. Processed {len(processed_call_ids)} total calls.")
