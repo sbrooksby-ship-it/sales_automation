@@ -135,54 +135,79 @@ def run_hourly_extraction():
             ai_frame.get_by_role("menuitem", name="Transcripts").click()
             page.wait_for_timeout(5000)
 
-            # --- APPLY FILTERS ---
+            # --- APPLY CUSTOM FILTERS ---
             print("Applying custom filters...", flush=True)
 
-            # 1. Disposition / Token Filter Setup
+            # 1. Date Filter ("Last 7 Days" -> "Today")
+            print("Setting Date filter to 'Today'...", flush=True)
             try:
-                grid_frame.get_by_test_id('filter-token').nth(2).click()
-                page.wait_for_timeout(1000)
-                grid_frame.locator("svg, input[type='checkbox']").nth(0).click(force=True)
-                grid_frame.locator("svg, input[type='checkbox']").nth(1).click(force=True)
-                grid_frame.get_by_role('button', name='Done').click()
-                page.wait_for_timeout(1000)
+                date_btn = grid_frame.get_by_role('button', name=re.compile(r'Last 7 Days|Today|Start Date'))
+                if date_btn.is_visible():
+                    date_btn.click()
+                    page.wait_for_timeout(500)
+                    grid_frame.get_by_role('menuitem', name='Today').click()
+                    page.wait_for_timeout(500)
+                    update_btn = grid_frame.get_by_role('button', name='Update')
+                    if update_btn.is_visible():
+                        update_btn.click()
+                    page.wait_for_timeout(2000)
+            except Exception as e_date:
+                print(f"Date filter note: {e_date}", flush=True)
+
+            # 2. Disposition / Token Filter Setup
+            print("Setting up Disposition / Token filters...", flush=True)
+            try:
+                token_filter = grid_frame.get_by_test_id('filter-token').nth(3)
+                if token_filter.is_visible():
+                    token_filter.click()
+                    page.wait_for_timeout(1000)
+                    grid_frame.locator("svg, input[type='checkbox']").nth(0).click(force=True)
+                    grid_frame.locator("svg, input[type='checkbox']").nth(1).click(force=True)
+                    grid_frame.get_by_role('button', name='Done').click()
+                    page.wait_for_timeout(1000)
             except Exception as e_f1:
                 print(f"Filter 1 note: {e_f1}", flush=True)
 
-            # 2. Talk Time Filter (Set >= 180 seconds)
+            # 3. Talk Time Filter (Set >= 180 seconds)
             print("Setting Talk Time filter to >= 180 seconds...", flush=True)
             try:
-                grid_frame.get_by_role('button', name=re.compile(r'is >=|Talk Time')).click()
-                page.wait_for_timeout(500)
-                num_input = grid_frame.get_by_test_id('single-number')
-                num_input.click()
-                num_input.fill("180")
-                page.wait_for_timeout(500)
-                grid_frame.get_by_role('button', name='Update').click()
-                page.wait_for_timeout(3000)
+                tt_btn = grid_frame.get_by_role('button', name=re.compile(r'is >=|Talk Time'))
+                if tt_btn.is_visible():
+                    tt_btn.click()
+                    page.wait_for_timeout(500)
+                    num_input = grid_frame.get_by_test_id('single-number')
+                    num_input.click()
+                    num_input.fill("180")
+                    page.wait_for_timeout(500)
+                    update_btn = grid_frame.get_by_role('button', name='Update')
+                    if update_btn.is_visible():
+                        update_btn.click()
+                    page.wait_for_timeout(3000)
             except Exception as e_f2:
                 print(f"Talk time filter note: {e_f2}", flush=True)
 
-            # 3. Exclude Dispositions ("doesn't contain" filters)
+            # 4. Exclude Dispositions ("doesn't contain" filters)
+            print("Setting Exclusion filters...", flush=True)
             try:
-                if grid_frame.get_by_role('button', name='is any value').nth(4).is_visible():
-                    grid_frame.get_by_role('button', name='is any value').nth(4).click()
+                any_val_btn = grid_frame.get_by_role('button', name='is any value').nth(4)
+                if any_val_btn.is_visible():
+                    any_val_btn.click()
                     page.wait_for_timeout(500)
                     grid_frame.get_by_text("doesn't contain").first.click()
                     page.wait_for_timeout(500)
 
                     search_box = grid_frame.get_by_placeholder("any value").first
                     if search_box.is_visible():
-                        search_box.fill("dr")
-                        page.wait_for_timeout(500)
-                        grid_frame.locator("svg, input[type='checkbox']").first.click(force=True)
-
-                        search_box.fill("could")
+                        search_box.fill("drop")
                         page.wait_for_timeout(500)
                         grid_frame.locator("svg, input[type='checkbox']").first.click(force=True)
 
                     grid_frame.get_by_role('button', name='Done').click()
-                    grid_frame.get_by_role('button', name='Update').click()
+                    page.wait_for_timeout(500)
+
+                    update_btn = grid_frame.get_by_role('button', name='Update')
+                    if update_btn.is_visible():
+                        update_btn.click()
                     page.wait_for_timeout(3000)
             except Exception as e_f3:
                 print(f"Exclusion filter note: {e_f3}", flush=True)
