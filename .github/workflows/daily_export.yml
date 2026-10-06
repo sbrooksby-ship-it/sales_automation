@@ -2,13 +2,13 @@ name: Daily Five9 Scraper
 
 on:
   schedule:
-    - cron: '0 1 * * *' # Daily at 7:00 PM Mountain Daylight Time (01:00 UTC)
-  workflow_dispatch:      # Allows manual triggers via GitHub Actions UI
+    - cron: '0 1 * * *' # Daily at 7:00 PM Mountain Time (01:00 UTC)
+  workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 15   # Automatically cancels job if stuck longer than 15 minutes
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -33,11 +33,17 @@ jobs:
           echo "$TOKEN_PICKLE_B64" | base64 --decode > token.pickle
           echo "$CLIENT_SECRET_JSON" > client_secret.json
 
+          if [ ! -s token.pickle ]; then
+            echo "::error::TOKEN_PICKLE_B64 secret is missing or invalid base64!"
+            exit 1
+          fi
+
       - name: Run Playwright Scraper
         env:
           FIVE9_USER: ${{ secrets.FIVE9_USER }}
           FIVE9_PASS: ${{ secrets.FIVE9_PASS }}
           HEADLESS_MODE: "true"
+          PYTHONUNBUFFERED: "1" # Force real-time log streaming
         run: python sales.py
 
       - name: Upload Debug Artifacts
