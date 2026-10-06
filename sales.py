@@ -131,14 +131,14 @@ def run_hourly_extraction():
             ai_frame.get_by_text("Transcripts").first.click()
             page.wait_for_timeout(5000)
 
-            # --- APPLY RESILIENT FILTERS ---
+            # --- APPLY RESILIENT FILTERS (ROLE-BASED) ---
             print("Applying custom filters...")
 
             # 1. Custom Token setup
             grid_frame.get_by_test_id('filter-token').nth(3).click()
             page.wait_for_timeout(1000)
-            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(0).click()
-            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(1).click()
+            grid_frame.get_by_role('checkbox').nth(0).click()
+            grid_frame.get_by_role('checkbox').nth(1).click()
             grid_frame.get_by_role('button', name='Done').click()
             page.wait_for_timeout(1000)
 
@@ -158,8 +158,8 @@ def run_hourly_extraction():
             grid_frame.get_by_role('dialog', name=re.compile('is not blank')).get_by_role('combobox').click()
             grid_frame.get_by_role('dialog', name=re.compile("doesn't contain")).get_by_placeholder('any value').click()
             page.wait_for_timeout(500)
-            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(0).click()
-            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').nth(1).click()
+            grid_frame.get_by_role('checkbox').nth(0).click()
+            grid_frame.get_by_role('checkbox').nth(1).click()
             grid_frame.get_by_role('button', name='Done').click()
             grid_frame.get_by_role('button', name='Update').click()
             page.wait_for_timeout(3000)
@@ -168,7 +168,7 @@ def run_hourly_extraction():
             grid_frame.get_by_role('button', name=re.compile('does not contain Call Drop')).click()
             page.wait_for_timeout(500)
             grid_frame.get_by_role('dialog', name=re.compile("doesn't contain")).get_by_label('any value').click()
-            grid_frame.locator('.FauxCheckbox-sc-1yuna8r-0').first.click()
+            grid_frame.get_by_role('checkbox').first.click()
             grid_frame.get_by_role('button', name='Done').click()
             grid_frame.get_by_role('button', name='Update').click()
 
