@@ -19,7 +19,7 @@ DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 
 def get_drive_service():
-    """Authenticates using stored token or initiates OAuth flow."""
+    """Authenticates using stored token or refreshes it safely without hanging CI workflows."""
     creds = None
 
     if os.path.exists("token.pickle") and os.path.getsize("token.pickle") > 0:
@@ -27,22 +27,27 @@ def get_drive_service():
             with open("token.pickle", "rb") as token:
                 creds = pickle.load(token)
         except Exception as e:
-            print(f"Error loading token.pickle: {e}")
+            print(f"Error loading token.pickle: {e}", flush=True)
             creds = None
     else:
-        print("ERROR: token.pickle is missing or 0 bytes! Check TOKEN_PICKLE_B64 in GitHub Secrets.")
+        raise RuntimeError("token.pickle is missing or 0 bytes! Check TOKEN_PICKLE_B64 in GitHub Secrets.")
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                print("Google OAuth token expired. Refreshing token...", flush=True)
+                creds.refresh(Request())
+                with open("token.pickle", "wb") as token:
+                    pickle.dump(creds, token)
+                print("Google OAuth token refreshed successfully.", flush=True)
+            except Exception as refresh_err:
+                raise RuntimeError(
+                    f"Failed to refresh Google OAuth token: {refresh_err}. Please re-generate token.pickle locally."
+                )
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CLIENT_SECRET_FILE, DRIVE_SCOPES
+            raise RuntimeError(
+                "Google OAuth credentials invalid/missing refresh_token. Re-generate TOKEN_PICKLE_B64 locally."
             )
-            creds = flow.run_local_server(port=0)
-
-        with open("token.pickle", "wb") as token:
-            pickle.dump(creds, token)
 
     return build("drive", "v3", credentials=creds)
 
@@ -67,11 +72,11 @@ def upload_transcript_to_drive(drive_service, file_name, text_content):
         media_body=media,
         fields="id"
     ).execute()
-    print(f"Uploaded '{file_name}' to Drive. (ID: {uploaded_file.get('id')})")
+    print(f"Uploaded '{file_name}' to Drive. (ID: {uploaded_file.get('id')})", flush=True)
 
 
 def run_hourly_extraction():
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Launching Playwright browser...")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Launching Playwright browser...", flush=True)
     drive_service = get_drive_service()
 
     with sync_playwright() as p:
@@ -86,7 +91,7 @@ def run_hourly_extraction():
         page = context.new_page()
 
         try:
-            print("Navigating to Five9 Admin Console...")
+            print("Navigating to Five9 Admin Console...", flush=True)
             page.goto("https://admin.us.five9.net/", wait_until="networkidle")
             page.wait_for_timeout(3000)
 
@@ -94,7 +99,7 @@ def run_hourly_extraction():
             dashboard_visible = page.get_by_text("AI Insights").first.is_visible()
 
             if not dashboard_visible:
-                print("Dashboard not found. Login required. Entering credentials...")
+                print("Dashboard not found. Login required. Entering credentials...", flush=True)
                 page.get_by_test_id("input").click()
                 page.get_by_test_id("input").fill(FIVE9_USER)
                 page.get_by_role("button", name="Next").click()
@@ -106,15 +111,15 @@ def run_hourly_extraction():
 
                 page.get_by_role("button", name="Sign In").click()
 
-                print("Credentials submitted. Waiting for dashboard...")
+                print("Credentials submitted. Waiting for dashboard...", flush=True)
                 page.wait_for_timeout(8000)
 
                 context.storage_state(path="state.json")
-                print("Login complete. Saved updated session state.")
+                print("Login complete. Saved updated session state.", flush=True)
             else:
-                print("Active session detected! AI Insights is visible.")
+                print("Active session detected! AI Insights is visible.", flush=True)
 
-            print("Navigating to AI Insights...")
+            print("Navigating to AI Insights...", flush=True)
             if page.locator(".HomeCard-icon").first.is_visible():
                 page.locator(".HomeCard-icon").first.click(force=True)
 
@@ -126,12 +131,12 @@ def run_hourly_extraction():
             transcripts_frame = ai_frame.frame_locator('#Transcripts')
             grid_frame = transcripts_frame.frame_locator('iframe')
 
-            print("Navigating to Transcripts tab...")
+            print("Navigating to Transcripts tab...", flush=True)
             ai_frame.get_by_role("menuitem", name="Transcripts").click()
             page.wait_for_timeout(5000)
 
-            # --- APPLY UPDATED FILTERS ---
-            print("Applying updated custom filters...")
+            # --- APPLY FILTERS ---
+            print("Applying custom filters...", flush=True)
 
             # 1. Disposition / Token Filter Setup
             try:
@@ -142,10 +147,10 @@ def run_hourly_extraction():
                 grid_frame.get_by_role('button', name='Done').click()
                 page.wait_for_timeout(1000)
             except Exception as e_f1:
-                print(f"Note on Filter 1 setup: {e_f1}")
+                print(f"Filter 1 note: {e_f1}", flush=True)
 
             # 2. Talk Time Filter (Set >= 180 seconds)
-            print("Setting Talk Time filter to >= 180 seconds...")
+            print("Setting Talk Time filter to >= 180 seconds...", flush=True)
             try:
                 grid_frame.get_by_role('button', name=re.compile(r'is >=|Talk Time')).click()
                 page.wait_for_timeout(500)
@@ -156,7 +161,7 @@ def run_hourly_extraction():
                 grid_frame.get_by_role('button', name='Update').click()
                 page.wait_for_timeout(3000)
             except Exception as e_f2:
-                print(f"Note on Talk Time filter: {e_f2}")
+                print(f"Talk time filter note: {e_f2}", flush=True)
 
             # 3. Exclude Dispositions ("doesn't contain" filters)
             try:
@@ -180,13 +185,13 @@ def run_hourly_extraction():
                     grid_frame.get_by_role('button', name='Update').click()
                     page.wait_for_timeout(3000)
             except Exception as e_f3:
-                print(f"Note on exclusion filters: {e_f3}")
+                print(f"Exclusion filter note: {e_f3}", flush=True)
 
-            print("Filters applied! Waiting for grid to settle...")
+            print("Filters applied! Waiting for grid to settle...", flush=True)
             page.wait_for_timeout(6000)
 
             # --- ITERATIVE SCROLL AND PROCESS LOOP ---
-            print("Processing virtualized grid items...")
+            print("Processing virtualized grid items...", flush=True)
             processed_call_ids = set()
             consecutive_empty_scrolls = 0
 
@@ -208,10 +213,10 @@ def run_hourly_extraction():
                     processed_call_ids.add(call_id)
                     consecutive_empty_scrolls = 0
 
-                    print(f"\n--- Processing Call ID: {call_id} ---")
+                    print(f"\n--- Processing Call ID: {call_id} ---", flush=True)
 
                     if is_already_in_drive(drive_service, call_id):
-                        print(f"Skipping Call ID {call_id} (Already exists in Google Drive).")
+                        print(f"Skipping Call ID {call_id} (Already exists in Google Drive).", flush=True)
                         continue
 
                     try:
@@ -224,7 +229,7 @@ def run_hourly_extraction():
                         view_btn.click()
 
                         # --- LOAD TIME ALLOWANCE FOR TRANSCRIPTS ---
-                        print(f"Waiting 5 seconds for Call ID {call_id} transcript to load...")
+                        print(f"Waiting 5 seconds for Call ID {call_id} transcript to load...", flush=True)
                         page.wait_for_timeout(5000)
 
                         transcripts_frame.get_by_test_id("Dropdown").get_by_role("button", name="Transcript").click()
@@ -256,23 +261,23 @@ def run_hourly_extraction():
                         page.wait_for_timeout(1500)
 
                     except Exception as ex:
-                        print(f"Failed to process Call ID {call_id}. Error: {ex}")
+                        print(f"Failed to process Call ID {call_id}. Error: {ex}", flush=True)
                         if not page.is_closed():
                             page.keyboard.press("Escape")
                             page.wait_for_timeout(1500)
 
                 else:
-                    print("No new calls visible. Scrolling down to load more...")
+                    print("No new calls visible. Scrolling down to load more...", flush=True)
                     grid_frame.locator("body").click(force=True)
                     page.mouse.wheel(delta_x=0, delta_y=600)
 
                     consecutive_empty_scrolls += 1
                     page.wait_for_timeout(3000)
 
-            print(f"\nSUCCESS! Completed extraction. Processed {len(processed_call_ids)} total calls.")
+            print(f"\nSUCCESS! Completed extraction. Processed {len(processed_call_ids)} total calls.", flush=True)
 
         except Exception as e:
-            print(f"Navigation error: {e}")
+            print(f"Navigation error: {e}", flush=True)
             if not page.is_closed():
                 page.screenshot(path="error_screenshot.png")
 
